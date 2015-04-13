@@ -91,3 +91,7 @@ func init() {
 	numcpu := runtime.NumCPU()
 	runtime.GOMAXPROCS(numcpu) // Try to use all available CPUs.
 }
+
+/* Min dator använder 4 CPU:er. Paralleliseringen gjorde mitt program från ca 1min40sek
+(var lite ojämna resultat, varierade från 2+min ner till nära en minut) till 15 sekunder.
+*/
