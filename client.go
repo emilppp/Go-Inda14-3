@@ -17,7 +17,7 @@ func main() {
 	for {
 		before := time.Now()
 		//res := Get(server[0])
-		res := Read(server[0], time.Second)
+		//res := Read(server[0], time.Second)
 		//res := MultiRead(server, time.Second)
 		after := time.Now()
 		fmt.Println("Response:", *res)
@@ -55,7 +55,7 @@ func Get(url string) *Response {
 // to show up in testing. Please fix them right away â€“ and don't forget to
 // write a doc comment this time.
 // 1. DATA RACE.... Innan kunde res försöka bindas i go-rutinen samtidigt eller ändras till något som den inte ska vara
-// senare i select. Löser det med att använda en kanal.
+// senare i select. Löser det med att använda en kanal. Buffrar även kanalen.
 // 2. Om båda cases i selecten är sanna (vilket är väldigt osannolikt, men ändå)
 // så kommer select kunna välja att köra båda. Vilken som körs väljs 'pseudo-randomly'
 // Löser detta genom att res endast kan ge en time-out om res faktiskt är nil. Annars kan det hända att
@@ -63,7 +63,7 @@ func Get(url string) *Response {
 // felaktig time-out
 
 func Read(url string, timeout time.Duration) (res *Response) {
-	ch := make(chan *Response)
+	ch := make(chan *Response, 1)
 	go func() {
 		ch <- Get(url)
 	}()
@@ -84,7 +84,7 @@ func Read(url string, timeout time.Duration) (res *Response) {
 // If none of the servers answer before timeout, the response is
 // 503 â€“ Service unavailable.
 func MultiRead(urls []string, timeout time.Duration) (res *Response) {
-	ch := make(chan *Response)
+	ch := make(chan *Response, (len(urls)))
 	for _, x := range urls { // Kör en go-rutin för samtliga strängar i arrayen urls.
 		go func(z string) {
 			ch <- Get(z)
