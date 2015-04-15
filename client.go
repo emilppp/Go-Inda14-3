@@ -17,8 +17,8 @@ func main() {
 	for {
 		before := time.Now()
 		//res := Get(server[0])
-		//res := Read(server[0], time.Second)
-		res := MultiRead(server, time.Second)
+		res := Read(server[0], time.Second)
+		//res := MultiRead(server, time.Second)
 		after := time.Now()
 		fmt.Println("Response:", *res)
 		fmt.Println("Time:", after.Sub(before))
@@ -54,7 +54,14 @@ func Get(url string) *Response {
 // I've found two insidious bugs in this function; both of them are unlikely
 // to show up in testing. Please fix them right away â€“ and don't forget to
 // write a doc comment this time.
-// DATA RACE.... Löser det med att använda kanaler!
+// 1. DATA RACE.... Innan kunde res försöka bindas i go-rutinen samtidigt eller ändras till något som den inte ska vara
+// senare i select. Löser det med att använda en kanal.
+// 2. Om båda cases i selecten är sanna (vilket är väldigt osannolikt, men ändå)
+// så kommer select kunna välja att köra båda. Vilken som körs väljs 'pseudo-randomly'
+// Löser detta genom att res endast kan ge en time-out om res faktiskt är nil. Annars kan det hända att
+// res har ett värde men att det tagit exakt så lång tid som det ska ta för att ge en timeout, och då kan skicka ut en
+// felaktig time-out
+
 func Read(url string, timeout time.Duration) (res *Response) {
 	ch := make(chan *Response)
 	go func() {
@@ -63,7 +70,11 @@ func Read(url string, timeout time.Duration) (res *Response) {
 	select {
 	case res = <-ch:
 	case <-time.After(timeout):
-		res = &Response{"Gateway timeout\n", 504}
+		if res == nil {
+			res = &Response{"Gateway timeout\n", 504}
+		} else {
+			res = <-ch
+		}
 	}
 	return
 }
@@ -74,7 +85,7 @@ func Read(url string, timeout time.Duration) (res *Response) {
 // 503 â€“ Service unavailable.
 func MultiRead(urls []string, timeout time.Duration) (res *Response) {
 	ch := make(chan *Response)
-	for _, x := range urls {
+	for _, x := range urls { // Kör en go-rutin för samtliga strängar i arrayen urls.
 		go func(z string) {
 			ch <- Get(z)
 		}(x)
@@ -82,7 +93,11 @@ func MultiRead(urls []string, timeout time.Duration) (res *Response) {
 	select {
 	case res = <-ch:
 	case <-time.After(timeout):
-		res = &Response{"Service unavailable", 503}
+		if res == nil {
+			res = &Response{"Service unavailable", 503} // Service unavailable!
+		} else {
+			res = <-ch
+		}
 	}
-	return // TODO
+	return
 }
